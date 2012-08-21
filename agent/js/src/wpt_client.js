@@ -38,8 +38,8 @@ var workDoneServlet_ = 'work/workdone.php';
 var JOB_TEST_ID = 'Test ID';
 exports.JOB_TEST_ID = JOB_TEST_ID;
 
-var JOB_TIMEOUT_ = 60000;  // TODO(klm): Control via flag, must be much higher
-var NO_JOB_PAUSE_ = 10000;
+var timeout = 60000;
+exports.NO_JOB_PAUSE_ = 10000;
 
 var CRLF_ = '\r\n';
 var CRLF2_ = CRLF_ + CRLF_;
@@ -56,7 +56,7 @@ var CRLF2_ = CRLF_ + CRLF_;
  * @param client the client that should submit this job's results when done.
  * @param task JSON descriptor received from the server for this job.
  */
-function Job(client, task) {
+exports.Job = function(client, task) {
   'use strict';
   this.client_ = client;
   this.task = task;
@@ -73,7 +73,7 @@ function Job(client, task) {
   };
 }
 
-Job.prototype.onUncaughtException_ = function(e) {
+exports.Job.prototype.onUncaughtException_ = function(e) {
   'use strict';
   console.error('Uncaught exception for job %s: %s',
       this.id, e.stack);
@@ -123,6 +123,7 @@ function processResponse(response, callback) {
     }
   });
 }
+exports.processResponse = processResponse;
 
 /**
  * A WebPageTest client that talks to the WebPageTest server.
@@ -131,7 +132,7 @@ function processResponse(response, callback) {
  * @param location location name to use for job polling and result submission.
  * @param apiKey (optional) API key, if any.
  */
-function Client(baseUrl, location, apiKey) {
+function Client(baseUrl, location, apiKey, job_timeout) {
   'use strict';
   events.EventEmitter.call(this);
   this.baseUrl_ = url.parse(baseUrl);
@@ -147,11 +148,13 @@ function Client(baseUrl, location, apiKey) {
   this.apiKey = apiKey;
   this.timeoutTimer_ = undefined;
   this.currentJob_ = undefined;
+  if (job_timeout)
+    this.timeout = job_timeout;
 
   console.log('Created Client (urlPath=%s): %s', urlPath, JSON.stringify(this));
 }
-util.inherits(Client, events.EventEmitter);
 exports.Client = Client;
+util.inherits(Client, events.EventEmitter);
 
 Client.prototype.onUncaughtException_ = function(job, e) {
   'use strict';
@@ -166,14 +169,14 @@ Client.prototype.onUncaughtException_ = function(job, e) {
 Client.prototype.processJobResponse_ = function(responseBody) {
   'use strict';
   var self = this;  // For closure
-  var job = new Job(this, JSON.parse(responseBody));
+  var job = new exports.Job(this, JSON.parse(responseBody));
   // Set up job timeout
   this.timeoutTimer_ = global.setTimeout(function() {
     console.error('Job timeout: %s', job.id);
     self.emit('timeout', job);
     job.error = new Error('timeout');
     job.done();
-  }, JOB_TIMEOUT_);
+  }, this.timeout);
   this.currentJob_ = job;  // For comparison in jobDone_()
   // Handle all exceptions while the job is being processed
   try {
@@ -195,8 +198,8 @@ Client.prototype.requestNextJob_ = function () {
 
   console.log('Get work: ' + getWorkUrl);
   http.get(url.parse(getWorkUrl), function (res) {
-    processResponse(res, function (responseBody) {
-      if (responseBody === '') {  // No job for us yet
+    exports.processResponse(res, function (responseBody) {
+      if (responseBody === '' || responseBody[0] === '<') {  // No job for us yet
         self.emit('nojob');
       } else if (responseBody === 'shutdown') {  // Job server is shutting down
         self.emit('shutdown');
@@ -264,7 +267,7 @@ Client.prototype.postResultFile_ = function(job, resultFile, isDone, callback) {
     host:this.baseUrl_.hostname, port:this.baseUrl_.port, path:workDonePath,
     headers:headers};
   var request = http.request(options, function (res) {
-    processResponse(res, callback);
+    exports.processResponse(res, callback);
   });
   request.end(body, 'UTF-8');
 };
@@ -310,7 +313,7 @@ Client.prototype.run = function (forever) {
     this.on('nojob', function () {
       global.setTimeout(function () {
         self.requestNextJob_();
-      }, NO_JOB_PAUSE_);
+      }, exports.NO_JOB_PAUSE_);
     });
     this.on('done', function () {
       self.requestNextJob_();

@@ -52,6 +52,8 @@ function createSandboxedWebDriverModule() {
         setInterval: global.setInterval,
         clearTimeout: global.clearTimeout,
         clearInterval: global.clearInterval,
+        // TODO(klm): Why? We don't want a user script to be able 
+        //to require arbitrary modules
         require: require,
         // Define a dummy process object so the user can use
         // webdriver.process.  Feel free to copy over whitelisted
@@ -78,13 +80,14 @@ function createSandboxedWebDriverModule() {
 
   return result.promise;
 }
+exports.createSandboxedWebDriverModule = createSandboxedWebDriverModule;
 
 /**
  * Returns a sandboxed webdriver namespace safe for user script execution.
  */
 function createSandboxedWdNamespace(serverUrl, capabilities, afterBuildCb) {
   'use strict';
-  return createSandboxedWebDriverModule().then(function(wdSandbox) {
+  return exports.createSandboxedWebDriverModule().then(function(wdSandbox) {
     var isDriverBuilt = false;
 
     var operationNotPermitted = function(key) {
