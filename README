@@ -1,0 +1,3 @@
+This is a patch I wrote that got rolled into the official WebPagetest trunk
+
+It is  a complete rewrite of the Node.js agent that brings it to near production ready state and includes comprehensive tests with coverage analysis.
